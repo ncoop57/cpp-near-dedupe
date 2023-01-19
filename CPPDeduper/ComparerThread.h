@@ -255,12 +255,14 @@ public:
                 BS::multi_future<bool> internalCompareThreadFutures;
 
                 //parallelize across blocks, one item at a time
-                uint32_t blocksPerThread = (uint32_t)hashblocks.NumBlocks() / threadsToUse;
-                if (blocksPerThread * threadsToUse < (uint32_t)hashblocks.NumBlocks())
-                    blocksPerThread++;
-
+                //this will be at most off by numberOfThreads - 1, so we will add more to the ranges in the loop below
+                uint32_t totalBlocks = (uint32_t)hashblocks.NumBlocks();
+                uint32_t blocksPerThread = totalBlocks / threadsToUse;
                 uint32_t inclusiveStartInd = 0;
                 uint32_t exclusiveEndInd = blocksPerThread;
+
+                uint32_t kickedOffBlocks = 0;
+                uint32_t remainingThreads = threadsToUse;
 
                 std::stop_source workerThreadStopper;
 
@@ -278,7 +280,15 @@ public:
                     );
 
                     inclusiveStartInd += blocksPerThread;
+                    
+                    remainingThreads--;
+                    kickedOffBlocks += exclusiveEndInd;
+
                     exclusiveEndInd += blocksPerThread;
+
+                    //if we arent gonna get all the blocks, increase the number we send to the nesxt thread by 1. 
+                    if (kickedOffBlocks + (remainingThreads * blocksPerThread) < totalBlocks)
+                        ++exclusiveEndInd;
 
                     if (hashblocks.NumBlocks() <= exclusiveEndInd)
                         exclusiveEndInd = (uint32_t)hashblocks.NumBlocks();
