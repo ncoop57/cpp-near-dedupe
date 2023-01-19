@@ -163,9 +163,9 @@ public:
             if (blockVec->size() == blockVecs.capacity())
             {
                 //we went over the expected memory usage, create a new block vec
-                std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >* newBlockVec = new std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >();
+                std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >* newBlockVec = new std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >() { nullptr };
                 newBlockVec->reserve(backupBlockVecCapacity);
-                newBlockVec->push_back(new Block<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>() { nullptr })
+                newBlockVec->push_back(new Block<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>())
                 blockVecs.push_back(newBlockVec);
             }
             else
