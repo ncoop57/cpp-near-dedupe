@@ -148,7 +148,7 @@ public:
             blockVec = blockVec[blockVecs.size() - 1];
 
 
-        Block<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* b = blockVec[blockVec.size() - 1];
+        Block<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* b = (*blockVec)[blockVec.size() - 1];
 
 #ifdef __GNUC__
         memcpy(&(b->entries[b->size].hashes), hashes, len * sizeof(UINT_HASH_TYPE));
