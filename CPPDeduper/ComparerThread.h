@@ -73,7 +73,7 @@ class HashBlockAllocator
 public:
     HashBlockAllocator(uint32_t initialCapacity)
     {
-        std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >* initBlockVec = new std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >();
+        std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >* initBlockVec = new std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >() { nullptr };
         initBlockVec.reserve(initialCapacity);
         //reserve and add first block to fill
         initBlockVec.push_back(new Block<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>());
@@ -165,7 +165,7 @@ public:
                 //we went over the expected memory usage, create a new block vec
                 std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >* newBlockVec = new std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >();
                 newBlockVec->reserve(backupBlockVecCapacity);
-                newBlockVec->push_back(new Block<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>())
+                newBlockVec->push_back(new Block<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>() { nullptr })
                 blockVecs.push_back(newBlockVec);
             }
             else
