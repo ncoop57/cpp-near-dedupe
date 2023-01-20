@@ -73,18 +73,18 @@ class HashBlockAllocator
 public:
     HashBlockAllocator(uint32_t initialCapacity)
     {
-        std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >* initBlockVec = new std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >() { nullptr };
-        initBlockVec.reserve(initialCapacity);
+        std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >* initBlockVec = new std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >();
+        initBlockVec->reserve(initialCapacity);
         //reserve and add first block to fill
-        initBlockVec.push_back(new Block<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>());
-        blockVecs.push_back&initBlockVec);
+        initBlockVec->push_back(new Block<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>());
+        blockVecs.push_back(initBlockVec);
     }
 
     ~HashBlockAllocator()
     {
         for (auto blockVec : blockVecs)
         {
-            for (auto block : blockVec)
+            for (auto block : *blockVec)
             {
                 delete block;
             }
@@ -96,7 +96,7 @@ public:
         uint64_t entries = 0;
         for (auto blockVec : blockVecs)
         {
-            entries += (blockVec.size() * BLOCK_SIZE) - BLOCK_SIZE + blockVec[blockVec.size() - 1]->size;
+           entries += (blockVec->size() * BLOCK_SIZE) - BLOCK_SIZE + (*blockVec)[blockVec->size() - 1]->size;
         }
         return entries;
     }
@@ -106,7 +106,7 @@ public:
         size_t nb = 0;
         for (auto blockVec : blockVecs)
         {
-            nb += blockVec.size();
+            nb += blockVec->size();
         }
         return nb;
     }
@@ -116,7 +116,7 @@ public:
         uint64_t items = 0;
         for (auto blockVec : blockVecs)
         {
-            items += uint64_t(blockVec.size() * BLOCK_SIZE) - BLOCK_SIZE + blockVec[blockVec.size() - 1]->size;            
+           items += (uint64_t)(blockVec->size() * BLOCK_SIZE) - BLOCK_SIZE + (*blockVec)[blockVec->size() - 1]->size;            
         }
         items *= MAX_HASH_LEN;
         return items * (uint64_t)sizeof(UINT_HASH_TYPE);
@@ -129,8 +129,9 @@ public:
 
     Block<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* GetBlockPtr(uint32_t ind)
     {
-        if(ind >= blockVecs[0]->size())
-            return (*blockVecs[1])[ind];
+        if(ind >= blockVecs[0]->size()) [[unlikely]]
+            return (*blockVecs[1])[ind - blockVecs[0]->size()];
+
         return (*blockVecs[0])[ind];
     }
 
@@ -145,10 +146,10 @@ public:
         
         std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >* blockVec = blockVecs[0];
         if (blockVecs.size() > 1)
-            blockVec = blockVec[blockVecs.size() - 1];
+            blockVec = &blockVec[blockVecs.size() - 1];
 
 
-        Block<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* b = (*blockVec)[blockVec.size() - 1];
+        Block<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* b = (*blockVec)[blockVec->size() - 1];
 
 #ifdef __GNUC__
         memcpy(&(b->entries[b->size].hashes), hashes, len * sizeof(UINT_HASH_TYPE));
@@ -160,17 +161,17 @@ public:
         b->size++;
         if (b->size == BLOCK_SIZE)
         {
-            if (blockVec->size() == blockVecs.capacity())
+            if (blockVec->size() == blockVec->capacity())
             {
                 //we went over the expected memory usage, create a new block vec
-                std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >* newBlockVec = new std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >() { nullptr };
+                std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >* newBlockVec = new std::vector< Block< UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>* >();
                 newBlockVec->reserve(backupBlockVecCapacity);
-                newBlockVec->push_back(new Block<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>())
+                newBlockVec->push_back(new Block<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>());
                 blockVecs.push_back(newBlockVec);
             }
             else
             {
-                blockVec.push_back(new Block<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>());
+                blockVec->push_back(new Block<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>());
             }           
         }
     }
@@ -219,17 +220,15 @@ protected:
 
     LockableQueue< CompareThreadDupeItem* > duplicateItems;
 
-    HashBlockAllocator<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE> hashblocks;
-
-    //TODO make this configurable
     uint32_t expectedBlockAllocations;
+    HashBlockAllocator<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE> hashblocks;
 
 public:
     ComparerThread(uint32_t _workChunkSize, BS::thread_pool* _threadPool, uint32_t maxExpectedDocs, uint32_t maxThreadWorkers)
         : maxThreadWorkers(maxThreadWorkers),
         threadPool(_threadPool),
         workChunkSize(_workChunkSize),
-        expectedBlockAllocations((maxExpectedDocs / BLOCK_SIZE) + BLOCK_SIZ),
+        expectedBlockAllocations((maxExpectedDocs / BLOCK_SIZE) + BLOCK_SIZE),
         hashblocks(HashBlockAllocator<UINT_HASH_TYPE, MAX_HASH_LEN, BLOCK_SIZE>(expectedBlockAllocations))
     {
     }
@@ -304,6 +303,9 @@ public:
                 //this will be at most off by numberOfThreads - 1, so we will add more to the ranges in the loop below
                 uint32_t totalBlocks = (uint32_t)hashblocks.NumBlocks();
                 uint32_t blocksPerThread = totalBlocks / threadsToUse;
+                if (blocksPerThread == 0)
+                    blocksPerThread = 1;
+
                 uint32_t inclusiveStartInd = 0;
                 uint32_t exclusiveEndInd = blocksPerThread;
 
@@ -328,7 +330,7 @@ public:
                     inclusiveStartInd += blocksPerThread;
                     
                     remainingThreads--;
-                    kickedOffBlocks += exclusiveEndInd;
+                    kickedOffBlocks += (exclusiveEndInd - inclusiveStartInd);
 
                     exclusiveEndInd += blocksPerThread;
 
